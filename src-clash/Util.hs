@@ -1,22 +1,30 @@
 module Util
        ( mealyState
+       , mealyState'
        , activeLowReset
        , activeLow
        , activeHigh
        , countTo
        , muxRR
+       , nextIdx
+       , succIdx
        ) where
 
 import Clash.Prelude
 import Control.Monad.State
 import Data.Word
+import Data.Maybe (fromMaybe)
 
 mealyState :: (HiddenClockReset domain gated synchronous)
            => (i -> State s o) -> s -> (Signal domain i -> Signal domain o)
-mealyState f = mealy step
+mealyState f s = mealyState' f s (pure True)
+
+mealyState' :: (HiddenClockReset domain gated synchronous)
+            => (i -> State s o) -> s -> Signal domain Bool -> Signal domain i -> Signal domain o
+mealyState' f s = curry $ mealy step s . bundle
   where
-    step s x = let (y, s') = runState (f x) s
-               in (s', y)
+    step s (progress, x) = let (y, s') = runState (f x) s
+                           in (if progress then s' else s, y)
 
 activeLowReset :: Reset domain Asynchronous -> Reset domain Asynchronous
 activeLowReset = unsafeToAsyncReset . (not <$>) . unsafeFromAsyncReset
@@ -48,10 +56,13 @@ muxRR next ss = let (mask, i) = unbundle $ moore step id (mask0, (0 :: Index n))
                 in (mask, (!!) <$> bundle ss <*> i)
   where
     step s False = s
-    step (mask, i) True = (rotateLeftS mask d1, succIdx i)
+    step (mask, i) True = (rotateLeftS mask d1, nextIdx i)
 
     mask0 = repeat False <<+ True
 
-succIdx :: (KnownNat n) => Index n -> Index n
-succIdx x | x == maxBound = 0
-          | otherwise = succ x
+nextIdx :: (KnownNat n) => Index n -> Index n
+nextIdx = fromMaybe 0 . succIdx
+
+succIdx :: (KnownNat n) => Index n -> Maybe (Index n)
+succIdx x | x == maxBound = Nothing
+          | otherwise = Just $ succ x
