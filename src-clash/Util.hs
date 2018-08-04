@@ -22,7 +22,7 @@ activeLowReset :: Reset domain Asynchronous -> Reset domain Asynchronous
 activeLowReset = unsafeToAsyncReset . (not <$>) . unsafeFromAsyncReset
 
 activeLow :: (Functor f) => f Bool -> f Bit
-activeLow = fmap (complement . boolToBit)
+activeLow = fmap complement . activeHigh
 
 activeHigh :: (Functor f) => f Bool -> f Bit
 activeHigh = fmap boolToBit
